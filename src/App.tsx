@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { parseZwo } from "./zwo";
 import { WorkoutChart } from "./WorkoutChart";
 import { ftpToZone, formatDuration, zoneColor } from "./zones";
@@ -27,11 +27,25 @@ function timeInZones(segments: Segment[]) {
   return map;
 }
 
+function calculateTSS(segments: Segment[]) {
+  let tss = 0;
+  for (const s of segments) {
+    const dur = s.endSec - s.startSec;
+    const hrs = dur / 3600;
+    let if_ = 0;
+    if (s.kind === "steady") if_ = s.ftp;
+    else if (s.kind === "ramp") if_ = (s.ftpLow + s.ftpHigh) / 2;
+    else if (s.kind === "free") if_ = 0.5;
+    // TSS = (sec * IF^2) / 3600 * 100
+    tss += hrs * if_ * if_ * 100;
+  }
+  return Math.round(tss);
+}
+
 export default function App() {
   const [xml, setXml] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const [ftp, setFtp] = useState(230);
+  const [ftp, setFtp] = useState(250);
   const [showWatts, setShowWatts] = useState(false);
 
   const workout = useMemo(() => {
@@ -47,374 +61,633 @@ export default function App() {
 
   const totalSec = workout ? sumDuration(workout.segments) : 0;
   const zones = workout ? timeInZones(workout.segments) : null;
+  const tss = workout ? calculateTSS(workout.segments) : 0;
+
+  const [isDragging, setIsDragging] = useState(false);
 
   const onFile = async (file: File) => {
     const text = await file.text();
     setXml(text);
+    setIsDragging(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    // Only leave if we leave the main container, not just entering a child
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f) onFile(f);
+  };
+
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) onFile(f);
   };
 
   return (
     <div
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
       style={{
-        height: "100%",
-        display: "grid",
-        gridTemplateRows: "60px 1fr",
-        background: "#0f0f0f",
-        color: "#eaeaea",
+        minHeight: "100%",
+        display: "flex",
+        flexDirection: "column",
+        background: "var(--c-bg-page)",
+        position: "relative",
       }}>
+      {/* Global Drag Overlay */}
+      {isDragging && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "rgba(0,0,0,0.8)",
+            zIndex: 999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backdropFilter: "blur(4px)",
+            border: "4px dashed var(--c-accent)",
+          }}>
+          <div style={{ pointerEvents: "none", textAlign: "center" }}>
+            <div style={{ fontSize: 64 }}>📥</div>
+            <div
+              style={{
+                fontSize: 24,
+                fontWeight: 700,
+                color: "#fff",
+                marginTop: 16,
+              }}>
+              Drop .zwo file to load
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header
         style={{
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          borderBottom: "1px solid var(--c-border)",
+          padding: "0 24px",
+          height: 80,
           display: "flex",
           alignItems: "center",
-          padding: "0 24px",
-          gap: 20,
-          background: "#141414",
+          justifyContent: "space-between",
+          background: "var(--c-bg-page)",
+          position: "sticky",
+          top: 0,
+          zIndex: 100,
         }}>
-        <h1
-          style={{
-            margin: 0,
-            fontSize: 20,
-            fontWeight: 600,
-            letterSpacing: "-0.02em",
-          }}>
-          zwo preview
-        </h1>
-
-        <div
-          style={{
-            marginLeft: "auto",
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-          }}>
-          {/* File Input */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div
             style={{
-              position: "relative",
-              overflow: "hidden",
+              width: 40,
+              height: 40,
+              background: "linear-gradient(135deg, #fc6719, #d64b00)",
+              borderRadius: 8,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontWeight: 800,
+              fontSize: 20,
+              color: "#fff",
             }}>
-            <button
-              style={{
-                background: "#1b1b1b",
-                border: "1px solid rgba(255,255,255,0.15)",
-                color: "#eaeaea",
-                padding: "6px 12px",
-                fontSize: 13,
-                borderRadius: 8,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-              }}>
-              <span>Import .zwo</span>
-            </button>
+            Z
+          </div>
+          <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.5 }}>
+            ZWO <span style={{ color: "var(--c-accent)" }}>Preview</span>
+          </div>
+        </div>
+
+        {/* Removed generic nav tabs */}
+
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          {/* Import Button */}
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "8px 16px",
+              background: "var(--c-bg-element)",
+              borderRadius: 99,
+              cursor: "pointer",
+              fontSize: 13,
+              fontWeight: 600,
+              border: "1px solid transparent",
+              transition: "all 0.2s",
+            }}
+            className="hover:border-white">
+            <span>Import .zwo</span>
             <input
               type="file"
-              accept=".zwo,application/xml,text/xml"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) onFile(f);
-              }}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: "100%",
-                opacity: 0,
-                cursor: "pointer",
-              }}
+              accept=".zwo,.xml,application/xml,text/xml"
+              onChange={handleFileInput}
+              style={{ display: "none" }}
             />
-          </div>
+          </label>
 
           <div
-            style={{
-              width: 1,
-              height: 24,
-              background: "rgba(255,255,255,0.1)",
-            }}
+            style={{ width: 1, height: 24, background: "var(--c-border)" }}
           />
 
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 13, opacity: 0.6 }}>FTP</span>
+          <label style={{ fontSize: 13, color: "var(--c-text-muted)" }}>
+            FTP:
             <input
-              value={ftp}
-              onChange={(e) => setFtp(Number(e.target.value || 0))}
               type="number"
-              min={1}
+              value={ftp}
+              onChange={(e) => setFtp(Number(e.target.value))}
               style={{
-                width: 60,
-                background: "#0a0a0a",
-                border: "1px solid rgba(255,255,255,0.15)",
-                color: "#eaeaea",
-                padding: "4px 8px",
-                borderRadius: 6,
-                fontSize: 13,
-                textAlign: "right",
+                background: "transparent",
+                border: "none",
+                borderBottom: "1px solid var(--c-border)",
+                color: "#fff",
+                width: 40,
+                marginLeft: 8,
+                textAlign: "center",
               }}
             />
-          </div>
-
+          </label>
           <button
-            onClick={() => setShowWatts((s) => !s)}
-            style={{
-              background: "transparent",
-              border: "1px solid rgba(255,255,255,0.15)",
-              color: showWatts ? "#fff" : "rgba(255,255,255,0.6)",
-              padding: "6px 12px",
-              fontSize: 12,
-              borderRadius: 6,
-              cursor: "pointer",
-            }}>
+            onClick={() => setShowWatts(!showWatts)}
+            style={{ fontSize: 12, padding: "4px 10px" }}>
             {showWatts ? "WATTS" : "% FTP"}
           </button>
         </div>
       </header>
 
-      {/* Content Grid */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: workout ? "500px 1fr" : "1fr",
-          overflow: "hidden",
-        }}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          e.preventDefault();
-          const f = e.dataTransfer.files?.[0];
-          if (f) onFile(f);
-        }}>
-        {/* Empty State / Error */}
-        {!workout && (
+      {/* Main Content */}
+      <main className="container" style={{ flex: 1, paddingBottom: 60 }}>
+        {!workout ? (
           <div
             style={{
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              gap: 16,
-              opacity: 0.5,
-              height: "100%",
+              height: "calc(100vh - 140px)", // Fill remaining space roughly
+              gap: 20,
+              opacity: 0.6,
             }}>
-            <div style={{ fontSize: 48 }}>🚴</div>
-            <div>Drop a .zwo file here to preview</div>
-            {error && <div style={{ color: "#ff6b6b" }}>{error}</div>}
-          </div>
-        )}
+            <div style={{ fontSize: 64 }}>📂</div>
+            <div style={{ fontSize: 24, fontWeight: 600 }}>
+              Drop a .zwo file to begin
+            </div>
 
-        {/* Sidebar */}
-        {workout && (
-          <div
-            style={{
-              borderRight: "1px solid rgba(255,255,255,0.08)",
-              overflowY: "auto",
-              background: "#111",
-              display: "flex",
-              flexDirection: "column",
-            }}>
-            <div
+            <label
               style={{
-                padding: 20,
-                borderBottom: "1px solid rgba(255,255,255,0.05)",
+                padding: "12px 24px",
+                background: "var(--c-accent)",
+                color: "white",
+                borderRadius: 8,
+                cursor: "pointer",
+                fontWeight: 600,
+                marginTop: 12,
               }}>
-              <div style={{ fontSize: 18, fontWeight: 600, lineHeight: 1.3 }}>
-                {workout.name ?? "Untitled Workout"}
-              </div>
+              Browse File
+              <input
+                type="file"
+                accept=".zwo,.xml,application/xml,text/xml"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) onFile(f);
+                }}
+                style={{ display: "none" }}
+              />
+            </label>
+            {error && (
               <div
                 style={{
-                  marginTop: 6,
-                  fontSize: 13,
-                  opacity: 0.6,
-                  display: "flex",
-                  gap: 12,
+                  color: "var(--z6)",
+                  marginTop: 20,
+                  padding: "10px 16px",
+                  background: "rgba(255, 32, 32, 0.1)",
+                  borderRadius: 8,
                 }}>
-                <span>
-                  {Math.floor(totalSec / 60)}m{" "}
-                  {String(totalSec % 60).padStart(2, "0")}s
-                </span>
-                <span>•</span>
-                <span>{workout.segments.length} intervals</span>
+                Error: {error}
               </div>
-            </div>
-
-            <div style={{ padding: 12, display: "grid", gap: 8 }}>
-              {workout.segments.map((s, i) => {
-                const dur = s.endSec - s.startSec;
-
-                let text = "";
-                if (s.kind === "steady") {
-                  const v = showWatts
-                    ? `${Math.round(s.ftp * ftp)}W`
-                    : `${Math.round(s.ftp * 100)}%`;
-                  text = `${formatDuration(dur)} @ ${v}`;
-                } else if (s.kind === "ramp") {
-                  const a = showWatts
-                    ? `${Math.round(s.ftpLow * ftp)}W`
-                    : `${Math.round(s.ftpLow * 100)}%`;
-                  const b = showWatts
-                    ? `${Math.round(s.ftpHigh * ftp)}W`
-                    : `${Math.round(s.ftpHigh * 100)}%`;
-                  text = `${formatDuration(dur)} ramp ${a}-${b}`;
-                } else {
-                  text = `${formatDuration(dur)} free ride`;
-                }
-
-                const color =
-                  s.kind === "free"
-                    ? "rgba(255,255,255,0.1)"
-                    : s.kind === "steady"
-                      ? zoneColor[ftpToZone(s.ftp)]
-                      : zoneColor[ftpToZone((s.ftpLow + s.ftpHigh) / 2)];
-
-                return (
-                  <div
-                    key={i}
-                    style={{
-                      background: "rgba(255,255,255,0.03)",
-                      borderRadius: 8,
-                      padding: "14px 16px",
-                      display: "flex",
-                      gap: 12,
-                      alignItems: "center",
-                      borderLeft: `4px solid ${color}`,
-                    }}>
-                    <div style={{ flex: 1 }}>
-                      <div
-                        style={{ fontSize: 13, fontWeight: 500, opacity: 0.9 }}>
-                        {s.label ||
-                          (s.kind === "free" ? "Free Ride" : "Interval")}
-                      </div>
-                      <div style={{ fontSize: 12, opacity: 0.6, marginTop: 2 }}>
-                        {text}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            )}
           </div>
-        )}
-
-        {/* Main Chart Area */}
-        {workout && (
-          <div
-            style={{
-              overflowY: "auto",
-              padding: "24px 40px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 32,
-            }}>
-            {/* Chart Container */}
+        ) : (
+          <div style={{ marginTop: 40 }}>
+            {/* Breadcrumbs */}
             <div
               style={{
-                background: "#141414",
-                border: "1px solid rgba(255,255,255,0.05)",
-                borderRadius: 16,
-                padding: 20,
-                height: 260,
                 display: "flex",
-                flexDirection: "column",
+                gap: 8,
+                fontSize: 12,
+                color: "var(--c-text-muted)",
+                marginBottom: 16,
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
               }}>
-              <h3
+              <span
+                className="pill"
                 style={{
-                  margin: "0 0 20px 0",
-                  fontSize: 14,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
-                  opacity: 0.7,
+                  border: "1px solid var(--c-border)",
+                  padding: "4px 8px",
+                  borderRadius: 4,
                 }}>
-                Profile
-              </h3>
-              <div style={{ flex: 1, minHeight: 0 }}>
-                <WorkoutChart
-                  segments={workout.segments}
-                  ftpWatts={ftp}
-                  showWatts={showWatts}
-                  height={200}
-                />
-              </div>
+                Workouts
+              </span>
+              <span style={{ opacity: 0.5 }}>»</span>
+              <span
+                className="pill"
+                style={{
+                  border: "1px solid var(--c-border)",
+                  padding: "4px 8px",
+                  borderRadius: 4,
+                }}>
+                {workout.name}
+              </span>
             </div>
 
-            {/* Stats Grid */}
+            <h1
+              style={{
+                fontSize: 42,
+                marginBottom: 40,
+                color: "#eee",
+                letterSpacing: "-0.02em",
+              }}>
+              {workout.name}
+            </h1>
+
+            {/* Layout Grid */}
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-                gap: 24,
+                gridTemplateColumns: "1fr 340px",
+                gap: 40,
               }}>
-              {/* Zone Distribution */}
+              {/* Left Column (Chart + Content) */}
               <div
-                style={{
-                  background: "#141414",
-                  border: "1px solid rgba(255,255,255,0.05)",
-                  borderRadius: 16,
-                  padding: 20,
-                }}>
-                <h3
-                  style={{
-                    margin: "0 0 20px 0",
-                    fontSize: 14,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                    opacity: 0.7,
-                  }}>
-                  Zone Distribution
-                </h3>
-                {zones && (
+                style={{ display: "flex", flexDirection: "column", gap: 40 }}>
+                {/* Chart Card */}
+                <div>
+                  <div
+                    style={{
+                      height: 300,
+                      marginBottom: 24,
+                      position: "relative",
+                    }}>
+                    <WorkoutChart
+                      segments={workout.segments}
+                      ftpWatts={ftp}
+                      showWatts={showWatts}
+                      height={300}
+                    />
+                  </div>
+
+                  {/* Stats Bar */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(3, 1fr)",
+                      gap: 1,
+                      background: "var(--c-border)",
+                      borderRadius: 16,
+                      overflow: "hidden",
+                    }}>
+                    <StatBox
+                      label="Duration"
+                      value={formatDuration(totalSec)}
+                    />
+                    <StatBox label="Stress Points" value={tss.toString()} />
+                    <StatBox
+                      label="Segments"
+                      value={workout.segments.length.toString()}
+                    />
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div>
+                  <h3
+                    style={{
+                      fontSize: 18,
+                      marginBottom: 12,
+                      color: "var(--c-text-muted)",
+                    }}>
+                    Workout Overview
+                  </h3>
+                  <p style={{ lineHeight: 1.6, color: "#ccc", fontSize: 15 }}>
+                    {workout.description ||
+                      "No description available for this workout."}
+                  </p>
+                  <div style={{ marginTop: 20, display: "flex", gap: 12 }}>
+                    <div
+                      style={{
+                        padding: "8px 16px",
+                        background: "var(--c-bg-card)",
+                        borderRadius: 99,
+                        fontSize: 13,
+                        color: "var(--c-accent)",
+                        border: "1px solid var(--c-border)",
+                      }}>
+                      ✓ Available in Zwift
+                    </div>
+                  </div>
+                </div>
+
+                {/* Segments List */}
+                <div>
+                  <h3
+                    style={{
+                      fontSize: 18,
+                      marginBottom: 16,
+                      color: "var(--c-text-muted)",
+                    }}>
+                    Workout Segments
+                  </h3>
                   <div
                     style={{
                       display: "flex",
-                      gap: 12,
-                      alignItems: "flex-end",
-                      height: 80,
-                      paddingBottom: 4,
+                      flexDirection: "column",
+                      gap: 4,
                     }}>
-                    {Object.entries(zones).map(([z, sec]) => {
-                      const pct = totalSec ? sec / totalSec : 0;
-                      return (
-                        <div
-                          key={z}
-                          style={{
-                            flex: 1,
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            gap: 8,
-                            height: "100%",
-                            justifyContent: "flex-end",
-                          }}>
-                          <div
-                            style={{
-                              width: "100%",
-                              height: `${Math.max(4, pct * 100)}%`,
-                              background: (zoneColor as any)[z],
-                              borderRadius: 4,
-                              opacity: 0.9,
-                              transition: "height 0.3s ease",
-                            }}
-                            title={`${z}: ${Math.round(pct * 100)}%`}
-                          />
-                          <div
-                            style={{
-                              fontSize: 11,
-                              fontWeight: 600,
-                              opacity: 0.6,
-                            }}>
-                            {z}
-                          </div>
-                        </div>
-                      );
-                    })}
+                    {workout.nodes.map((node, i) => (
+                      <SegmentRow
+                        key={i}
+                        node={node}
+                        ftp={ftp}
+                        showWatts={showWatts}
+                      />
+                    ))}
                   </div>
-                )}
+                </div>
+              </div>
+
+              {/* Right Column (Sidebar) */}
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+                {/* Zone Distribution */}
+                <div className="card">
+                  <h3
+                    className="uppercase"
+                    style={{
+                      fontSize: 12,
+                      marginBottom: 20,
+                      color: "var(--c-text-muted)",
+                    }}>
+                    Zone Distribution
+                  </h3>
+                  {zones && (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-end",
+                        height: 120,
+                        gap: 8,
+                      }}>
+                      {(() => {
+                        const entries = Object.entries(zones);
+                        const maxVal = Math.max(
+                          ...entries.map(([_, sec]) => sec),
+                        );
+                        const totalS = totalSec || 1; // avoid /0
+
+                        return entries.map(([z, sec]) => {
+                          const pctOfTotal = sec / totalS;
+                          // Auto-scale: Max value fills 100% of the bar area
+                          // But we keep relative proportions correct.
+                          // If maxVal is 0 (empty workout), height is 4px.
+                          const heightPct =
+                            maxVal > 0 ? (sec / maxVal) * 100 : 0;
+
+                          return (
+                            <div
+                              key={z}
+                              style={{
+                                flex: 1,
+                                height: "100%",
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                justifyContent: "flex-end",
+                                gap: 6,
+                              }}>
+                              <div style={{ fontSize: 10, fontWeight: 700 }}>
+                                {Math.round(pctOfTotal * 100)}%
+                              </div>
+                              <div
+                                style={{
+                                  flex: 1,
+                                  width: "100%",
+                                  display: "flex",
+                                  alignItems: "flex-end",
+                                  justifyContent: "center",
+                                  minHeight: 0, // Fix for flex child overflow
+                                }}>
+                                <div
+                                  style={{
+                                    width: "100%",
+                                    height: `${Math.max(4, heightPct)}%`,
+                                    background: (zoneColor as any)[z],
+                                    borderRadius: "4px 4px 0 0",
+                                    opacity: 0.9,
+                                    transition: "height 0.3s ease",
+                                  }}
+                                />
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: 10,
+                                  color: "var(--c-text-muted)",
+                                }}>
+                                {z}
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  )}
+                </div>
+
+                <div className="card">
+                  <h3
+                    className="uppercase"
+                    style={{
+                      fontSize: 12,
+                      marginBottom: 20,
+                      color: "var(--c-text-muted)",
+                    }}>
+                    Tags
+                  </h3>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {workout.tags?.map((t) => (
+                      <span
+                        key={t.name}
+                        style={{
+                          fontSize: 12,
+                          padding: "4px 8px",
+                          background: "rgba(255,255,255,0.05)",
+                          borderRadius: 4,
+                          color: "var(--c-text-muted)",
+                        }}>
+                        {t.name}
+                      </span>
+                    )) || (
+                      <span
+                        style={{ fontSize: 12, color: "var(--c-text-muted)" }}>
+                        No tags
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         )}
+      </main>
+    </div>
+  );
+}
+
+function StatBox({ label, value }: { label: string; value: string }) {
+  return (
+    <div
+      style={{
+        background: "var(--c-bg-card)",
+        padding: "20px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 4,
+      }}>
+      <div style={{ fontSize: 24, fontWeight: 700, color: "#fff" }}>
+        {value}
+      </div>
+      <div
+        style={{
+          fontSize: 12,
+          textTransform: "uppercase",
+          letterSpacing: "0.05em",
+          color: "var(--c-text-muted)",
+        }}>
+        {label}
       </div>
     </div>
   );
+}
+
+function SegmentRow({
+  node,
+  ftp,
+  showWatts,
+}: {
+  node: any;
+  ftp: number;
+  showWatts: boolean;
+}) {
+  const fmt = (sec: number) => formatDuration(sec);
+  const pwr = (p: number) =>
+    showWatts ? `${Math.round(p * ftp)}W` : `${Math.round(p * 100)}%`;
+
+  let text = "";
+  let subText = "";
+  let color = "transparent";
+
+  if (node.kind === "group") {
+    const { repeat, onDuration, onPower, offDuration, offPower } = node;
+    const onTxt = `${fmt(onDuration)} @ ${pwr(onPower)}`;
+
+    if (offDuration > 0) {
+      const offTxt = `${fmt(offDuration)} @ ${pwr(offPower)}`;
+      text = `${repeat}x ${onTxt}, ${offTxt}`;
+    } else {
+      text = `${repeat}x ${onTxt}`;
+    }
+
+    subText = "Intervals";
+    color = zoneColor[ftpToZone(onPower)];
+  } else {
+    const s = node;
+    const dur = s.endSec - s.startSec;
+
+    if (s.kind === "steady") {
+      text = `${fmt(dur)} @ ${pwr(s.ftp)}`;
+      subText = s.label || zoneLabel(s.ftp);
+      color = zoneColor[ftpToZone(s.ftp)];
+    } else if (s.kind === "ramp") {
+      text = `${fmt(dur)} from ${pwr(s.ftpLow)} to ${pwr(s.ftpHigh)}`;
+      subText = s.label || "Ramp";
+      // Use average power for color
+      color = zoneColor[ftpToZone((s.ftpLow + s.ftpHigh) / 2)];
+    } else {
+      text = `${fmt(dur)} Free Ride`;
+      subText = s.label || "Free Ride";
+      // Gray for free ride
+      color = "#444";
+    }
+  }
+
+  // Determine text color based on background brightness?
+  // Most zones are bright enough for white text with shadow, or black text.
+  // Zwift style usually has white text with heavy shadow or just contrast.
+  // Let's use white with text-shadow for readability on all colors.
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        margin: "0 0 4px 0",
+        background: color,
+        borderRadius: 4,
+        padding: "10px 16px",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
+        overflow: "hidden",
+      }}>
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          color: "#fff",
+          fontWeight: 700,
+          fontSize: 15,
+          textShadow: "0 1px 3px rgba(0,0,0,0.4)",
+        }}>
+        {text}
+      </div>
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          color: "rgba(255,255,255,0.9)",
+          fontSize: 11,
+          fontWeight: 600,
+          textShadow: "0 1px 2px rgba(0,0,0,0.4)",
+          marginTop: 2,
+          textTransform: "uppercase",
+          letterSpacing: "0.05em",
+        }}>
+        {subText}
+      </div>
+    </div>
+  );
+}
+
+function zoneLabel(ftpPct: number) {
+  const z = ftpToZone(ftpPct);
+  if (z === "Z1") return "Recovery";
+  if (z === "Z2") return "Endurance";
+  if (z === "Z3") return "Tempo";
+  if (z === "Z4") return "Threshold";
+  if (z === "Z5") return "VO2 Max";
+  if (z === "Z6") return "Anaerobic";
+  return "Recovery";
 }
