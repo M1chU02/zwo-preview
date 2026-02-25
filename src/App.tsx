@@ -1,4 +1,27 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+const STORAGE_KEY_FTP = "zwo-preview:ftp";
+const STORAGE_KEY_SHOW_WATTS = "zwo-preview:showWatts";
+
+function loadFtp(): number {
+  try {
+    const v = localStorage.getItem(STORAGE_KEY_FTP);
+    if (v != null) {
+      const n = parseInt(v, 10);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+  } catch (_) {}
+  return 250;
+}
+
+function loadShowWatts(): boolean {
+  try {
+    const v = localStorage.getItem(STORAGE_KEY_SHOW_WATTS);
+    if (v === "true") return true;
+    if (v === "false") return false;
+  } catch (_) {}
+  return false;
+}
 import { parseZwo } from "./zwo";
 import { WorkoutChart } from "./WorkoutChart";
 import { ftpToZone, formatDuration, zoneColor } from "./zones";
@@ -45,8 +68,20 @@ function calculateTSS(segments: Segment[]) {
 export default function App() {
   const [xml, setXml] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [ftp, setFtp] = useState(250);
-  const [showWatts, setShowWatts] = useState(false);
+  const [ftp, setFtp] = useState(loadFtp);
+  const [showWatts, setShowWatts] = useState(loadShowWatts);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_FTP, String(ftp));
+    } catch (_) {}
+  }, [ftp]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_SHOW_WATTS, String(showWatts));
+    } catch (_) {}
+  }, [showWatts]);
 
   const workout = useMemo(() => {
     if (!xml) return null;
