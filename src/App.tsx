@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 const STORAGE_KEY_FTP = "zwo-preview:ftp";
+const STORAGE_KEY_WEIGHT = "zwo-preview:weight";
 const STORAGE_KEY_SHOW_WATTS = "zwo-preview:showWatts";
 
 function loadFtp(): number {
@@ -12,6 +13,17 @@ function loadFtp(): number {
     }
   } catch (_) {}
   return 250;
+}
+
+function loadWeight(): number {
+  try {
+    const v = localStorage.getItem(STORAGE_KEY_WEIGHT);
+    if (v != null) {
+      const n = parseInt(v, 10);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+  } catch (_) {}
+  return 75;
 }
 
 function loadShowWatts(): boolean {
@@ -65,10 +77,27 @@ function calculateTSS(segments: Segment[]) {
   return Math.round(tss);
 }
 
+function calculateAvgWatts(segments: Segment[], ftp: number) {
+  let totalWork = 0;
+  let totalDur = 0;
+  for (const s of segments) {
+    const dur = s.endSec - s.startSec;
+    let p = 0;
+    if (s.kind === "steady") p = s.ftp;
+    else if (s.kind === "ramp") p = (s.ftpLow + s.ftpHigh) / 2;
+    else if (s.kind === "free") p = 0.5;
+    
+    totalWork += dur * p * ftp;
+    totalDur += dur;
+  }
+  return totalDur > 0 ? Math.round(totalWork / totalDur) : 0;
+}
+
 export default function App() {
   const [xml, setXml] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ftp, setFtp] = useState(loadFtp);
+  const [weight, setWeight] = useState(loadWeight);
   const [showWatts, setShowWatts] = useState(loadShowWatts);
 
   useEffect(() => {
@@ -76,6 +105,12 @@ export default function App() {
       localStorage.setItem(STORAGE_KEY_FTP, String(ftp));
     } catch (_) {}
   }, [ftp]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_WEIGHT, String(weight));
+    } catch (_) {}
+  }, [weight]);
 
   useEffect(() => {
     try {
@@ -97,6 +132,7 @@ export default function App() {
   const totalSec = workout ? sumDuration(workout.segments) : 0;
   const zones = workout ? timeInZones(workout.segments) : null;
   const tss = workout ? calculateTSS(workout.segments) : 0;
+  const avgWatts = workout ? calculateAvgWatts(workout.segments, ftp) : 0;
 
   const [isDragging, setIsDragging] = useState(false);
 
@@ -254,6 +290,24 @@ export default function App() {
               }}
             />
           </label>
+          <label style={{ fontSize: 13, color: "var(--c-text-muted)" }}>
+            Weight:
+            <input
+              type="number"
+              value={weight}
+              onChange={(e) => setWeight(Number(e.target.value))}
+              style={{
+                background: "transparent",
+                border: "none",
+                borderBottom: "1px solid var(--c-border)",
+                color: "#fff",
+                width: 40,
+                marginLeft: 8,
+                textAlign: "center",
+              }}
+            />
+            <span style={{ marginLeft: 4 }}>kg</span>
+          </label>
           <button
             onClick={() => setShowWatts(!showWatts)}
             style={{ fontSize: 12, padding: "4px 10px" }}>
@@ -388,7 +442,7 @@ export default function App() {
                   <div
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "repeat(3, 1fr)",
+                      gridTemplateColumns: "repeat(5, 1fr)",
                       gap: 1,
                       background: "var(--c-border)",
                       borderRadius: 16,
@@ -399,6 +453,14 @@ export default function App() {
                       value={formatDuration(totalSec)}
                     />
                     <StatBox label="Stress Points" value={tss.toString()} />
+                    <StatBox
+                      label="Avg Watts"
+                      value={`${avgWatts}W`}
+                    />
+                    <StatBox
+                      label="Watts/kg"
+                      value={(avgWatts / (weight || 1)).toFixed(2)}
+                    />
                     <StatBox
                       label="Segments"
                       value={workout.segments.length.toString()}
