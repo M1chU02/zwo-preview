@@ -7,6 +7,7 @@ type Props = {
   ftpWatts?: number;
   showWatts?: boolean;
   height?: number;
+  interactive?: boolean;
 };
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
@@ -16,6 +17,7 @@ export function WorkoutChart({
   ftpWatts = 250,
   showWatts = false,
   height = 220,
+  interactive = true,
 }: Props) {
   const [hovered, setHovered] = useState<{
     x: number;
@@ -46,7 +48,7 @@ export function WorkoutChart({
         position: "relative",
         userSelect: "none",
       }}
-      onMouseLeave={() => setHovered(null)}>
+      onMouseLeave={interactive ? () => setHovered(null) : undefined}>
       <svg
         viewBox={`0 0 ${viewW} ${viewH}`}
         preserveAspectRatio="none"
@@ -77,14 +79,16 @@ export function WorkoutChart({
           const rx = 4; // Rounded top corners? Or just all corners
 
           const onMove = (e: React.MouseEvent) => {
-            setHovered({ x: e.clientX, y: e.clientY, s });
+            if (interactive) setHovered({ x: e.clientX, y: e.clientY, s });
           };
 
-          const commonProps = {
-            onMouseEnter: onMove,
-            onMouseMove: onMove,
-            style: { cursor: "crosshair", transition: "opacity 0.1s" },
-          };
+          const commonProps = interactive
+            ? {
+                onMouseEnter: onMove,
+                onMouseMove: onMove,
+                style: { cursor: "crosshair", transition: "opacity 0.1s" },
+              }
+            : { style: { pointerEvents: "none" as const } };
 
           let shape = null;
           let color = "#444";
@@ -170,7 +174,7 @@ export function WorkoutChart({
         })}
       </svg>
 
-      {hovered && (
+      {interactive && hovered && (
         <Tooltip
           x={hovered.x}
           y={hovered.y}
