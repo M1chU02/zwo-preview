@@ -39,6 +39,8 @@ import { parseZwo } from "./zwo";
 import { WorkoutChart } from "./WorkoutChart";
 import { ftpToZone, formatDuration, zoneColor } from "./zones";
 import type { Segment, Workout } from "./zwo";
+import { ProfilePanel } from "./ProfilePanel";
+import avatarImg from "./assets/cyclist_avatar.png";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -117,6 +119,7 @@ export default function App() {
   const [weight, setWeight] = useState(loadWeight);
   const [showWatts, setShowWatts] = useState(loadShowWatts);
   const [isDragging, setIsDragging] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   useEffect(() => { try { localStorage.setItem(STORAGE_KEY_FTP, String(ftp)); } catch (_) {} }, [ftp]);
   useEffect(() => { try { localStorage.setItem(STORAGE_KEY_WEIGHT, String(weight)); } catch (_) {} }, [weight]);
@@ -299,7 +302,7 @@ export default function App() {
         </div>
 
         {/* Right controls */}
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {/* Load Library (multi-file) */}
           <label style={{
             display: "flex", alignItems: "center", gap: 8,
@@ -341,36 +344,31 @@ export default function App() {
 
           <div style={{ width: 1, height: 24, background: "var(--c-border)" }} />
 
-          <label style={{ fontSize: 13, color: "var(--c-text-muted)" }}>
-            FTP:
-            <input
-              type="number" value={ftp}
-              onChange={(e) => setFtp(Number(e.target.value))}
-              style={{
-                background: "transparent", border: "none",
-                borderBottom: "1px solid var(--c-border)",
-                color: "#fff", width: 40, marginLeft: 8, textAlign: "center",
-              }}
-            />
-          </label>
-          <label style={{ fontSize: 13, color: "var(--c-text-muted)" }}>
-            Weight:
-            <input
-              type="number" value={weight}
-              onChange={(e) => setWeight(Number(e.target.value))}
-              style={{
-                background: "transparent", border: "none",
-                borderBottom: "1px solid var(--c-border)",
-                color: "#fff", width: 40, marginLeft: 8, textAlign: "center",
-              }}
-            />
-            <span style={{ marginLeft: 4 }}>kg</span>
-          </label>
           <button onClick={() => setShowWatts(!showWatts)} style={{ fontSize: 12, padding: "4px 10px" }}>
             {showWatts ? "WATTS" : "% FTP"}
           </button>
+
+          {/* Profile icon */}
+          <button
+            id="profile-btn"
+            className="profile-icon-btn"
+            onClick={() => setProfileOpen(true)}
+            title="Rider Profile"
+          >
+            <img src={avatarImg} alt="Profile" />
+          </button>
         </div>
       </header>
+
+      {/* ── Profile Panel ── */}
+      <ProfilePanel
+        open={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        ftp={ftp}
+        weight={weight}
+        onFtpChange={setFtp}
+        onWeightChange={setWeight}
+      />
 
       {/* ── Main ── */}
       <main className="container" style={{ flex: 1, paddingBottom: 60 }}>
