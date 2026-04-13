@@ -632,3 +632,126 @@ button:focus-visible {
   border: 1px solid rgba(255,255,255,0.06);
 }
 
+
+/* ── Search & Filters ─────────────────────────────────────────────────────── */
+
+.search-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  max-width: 400px;
+  margin: 0 20px;
+}
+
+.search-bar input {
+  width: 100%;
+  background: var(--c-bg-element);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-pill);
+  padding: 8px 16px 8px 40px;
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.search-bar input:focus {
+  border-color: var(--c-accent);
+  background: #3a3a3a;
+  box-shadow: 0 0 0 3px rgba(252, 103, 25, 0.15);
+}
+
+.search-bar__icon {
+  position: absolute;
+  left: 14px;
+  color: var(--c-text-muted);
+  font-size: 16px;
+  pointer-events: none;
+}
+
+.search-bar__clear {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  color: var(--c-text-muted);
+  cursor: pointer;
+  padding: 4px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.search-bar__clear:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.filter-badge {
+  background: var(--c-accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+}
+
+.sort-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.sort-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--c-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sort-pills {
+  display: flex;
+  gap: 8px;
+}
+
+.sort-pill {
+  background: var(--c-bg-card);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-pill);
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sort-pill:hover {
+  border-color: var(--c-text-muted);
+  color: #eee;
+}
+
+.sort-pill--active {
+  background: rgba(252, 103, 25, 0.1);
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+}
+
+.sort-pill__order {
+  font-size: 10px;
+  opacity: 0.8;
+}

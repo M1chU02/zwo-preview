@@ -121,6 +121,11 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
+  // Search & Sort State
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortKey, setSortKey] = useState<"name" | "duration" | "tss" | "watts">("name");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+
   useEffect(() => { try { localStorage.setItem(STORAGE_KEY_FTP, String(ftp)); } catch (_) {} }, [ftp]);
   useEffect(() => { try { localStorage.setItem(STORAGE_KEY_WEIGHT, String(weight)); } catch (_) {} }, [weight]);
   useEffect(() => { try { localStorage.setItem(STORAGE_KEY_SHOW_WATTS, String(showWatts)); } catch (_) {} }, [showWatts]);
@@ -137,6 +142,52 @@ export default function App() {
       return null;
     }
   }, [xml, selectedEntry]);
+
+  const filteredLibrary = useMemo(() => {
+    if (view !== "library") return [];
+    let result = [...library];
+
+    // Filter
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter((entry) => {
+        const name = entry.workout.name ?? decodeName(entry.fileName);
+        return name.toLowerCase().includes(q);
+      });
+    }
+
+    // Sort
+    result.sort((a, b) => {
+      let valA: any, valB: any;
+      if (sortKey === "name") {
+        valA = a.workout.name ?? decodeName(a.fileName);
+        valB = b.workout.name ?? decodeName(b.fileName);
+      } else if (sortKey === "duration") {
+        valA = sumDuration(a.workout.segments);
+        valB = sumDuration(b.workout.segments);
+      } else if (sortKey === "tss") {
+        valA = calculateTSS(a.workout.segments);
+        valB = calculateTSS(b.workout.segments);
+      } else if (sortKey === "watts") {
+        valA = calculateAvgWatts(a.workout.segments, ftp);
+        valB = calculateAvgWatts(b.workout.segments, ftp);
+      }
+
+      const order = sortOrder === "asc" ? 1 : -1;
+      if (valA < valB) return -1 * order;
+      if (valA > valB) return 1 * order;
+      return 0;
+    });
+
+    return result;
+  }, [library, searchQuery, sortKey, sortOrder, view, ftp]);
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (searchQuery) count++;
+    if (sortKey !== "name") count++;
+    return count;
+  }, [searchQuery, sortKey]);
 
   const totalSec = workout ? sumDuration(workout.segments) : 0;
   const zones = workout ? timeInZones(workout.segments) : null;
@@ -166,12 +217,6 @@ export default function App() {
       }
     }
     if (entries.length === 0) return;
-    // sort alphabetically by decoded name
-    entries.sort((a, b) => {
-      const na = a.workout.name ?? decodeName(a.fileName);
-      const nb = b.workout.name ?? decodeName(b.fileName);
-      return na.localeCompare(nb);
-    });
     setLibrary(entries);
     setView("library");
   };
@@ -243,15 +288,15 @@ export default function App() {
       )}
 
       {/* ── Header ── */}
-      <header style={{
+    <header style={{
         borderBottom: "1px solid var(--c-border)",
         padding: "0 24px", height: 80,
         display: "flex", alignItems: "center", justifyContent: "space-between",
         background: "var(--c-bg-page)",
         position: "sticky", top: 0, zIndex: 100,
       }}>
-        {/* Logo */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        {/* Left Section (Logo & Back) */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 320 }}>
           {/* Back button */}
           {(view === "detail" || view === "library") && (
             <button
@@ -289,17 +334,42 @@ export default function App() {
           <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.5 }}>
             ZWO <span style={{ color: "var(--c-accent)" }}>Preview</span>
           </div>
-          {view === "library" && (
-            <span style={{
-              fontSize: 12, color: "var(--c-text-muted)",
-              background: "var(--c-bg-element)",
-              border: "1px solid var(--c-border)",
-              borderRadius: 99, padding: "3px 10px",
-            }}>
-              {library.length} workout{library.length !== 1 ? "s" : ""}
-            </span>
-          )}
-        </div>
+            {view === "library" && (
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <span style={{
+                  fontSize: 12, color: "var(--c-text-muted)",
+                  background: "var(--c-bg-element)",
+                  border: "1px solid var(--c-border)",
+                  borderRadius: 99, padding: "3px 10px",
+                }}>
+                  {library.length} workout{library.length !== 1 ? "s" : ""}
+                </span>
+                {activeFilterCount > 0 && (
+                  <span className="filter-badge" title="Active filters">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+        {/* Search Bar (Library View Only) */}
+        {view === "library" && (
+          <div className="search-bar">
+            <span className="search-bar__icon">🔍</span>
+            <input
+              type="text"
+              placeholder="Filter by name..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button className="search-bar__clear" onClick={() => setSearchQuery("")}>
+                ✕
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Right controls */}
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -384,16 +454,63 @@ export default function App() {
                 Click any workout to view details · {library.length} workouts loaded
               </p>
             </div>
-            <div className="library-grid">
-              {library.map((entry, i) => (
-                <WorkoutCard
-                  key={i}
-                  entry={entry}
-                  ftp={ftp}
-                  onClick={() => openFromLibrary(entry)}
-                />
-              ))}
+
+            {/* Sort Controls */}
+            <div className="sort-container">
+              <span className="sort-label">Sort by:</span>
+              <div className="sort-pills">
+                {[
+                  { key: "name", label: "Name" },
+                  { key: "duration", label: "Duration" },
+                  { key: "tss", label: "TSS" },
+                  { key: "watts", label: "Avg Watts" },
+                ].map((item) => (
+                  <button
+                    key={item.key}
+                    className={`sort-pill ${sortKey === item.key ? "sort-pill--active" : ""}`}
+                    onClick={() => {
+                      if (sortKey === item.key) {
+                        setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                      } else {
+                        setSortKey(item.key as any);
+                        setSortOrder(item.key === "name" ? "asc" : "desc"); // Default name to asc, others to desc
+                      }
+                    }}
+                  >
+                    {item.label}
+                    {sortKey === item.key && (
+                      <span className="sort-pill__order">
+                        {sortOrder === "asc" ? "↑" : "↓"}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {filteredLibrary.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "80px 0", color: "var(--c-text-muted)" }}>
+                 <div style={{ fontSize: 48, marginBottom: 16 }}>🔎</div>
+                 <h3>No workouts match your search</h3>
+                 <button 
+                   onClick={() => setSearchQuery("")}
+                   style={{ marginTop: 20, background: "transparent", border: "1px solid var(--c-border)" }}
+                 >
+                   Clear filters
+                 </button>
+              </div>
+            ) : (
+              <div className="library-grid">
+                {filteredLibrary.map((entry, i) => (
+                  <WorkoutCard
+                    key={i}
+                    entry={entry}
+                    ftp={ftp}
+                    onClick={() => openFromLibrary(entry)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
 
